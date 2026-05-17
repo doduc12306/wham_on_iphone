@@ -20,18 +20,18 @@ jobs:
 
     - name: Build Xcode Project (No Codesign)
       run: |
-        # Lệnh này sẽ tìm file .xcodeproj và build nó sang dạng thô mà không cần chứng chỉ bảo mật ngay
+        # Tự động tìm file .xcodeproj và build sang cấu hình Release cho thiết bị iOS thật
         xcodebuild -project *.xcodeproj -scheme WHAM -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO
 
     - name: Package into .ipa
       run: |
         mkdir -p Payload
-        # Tìm file .app vừa build xong và ném vào thư mục Payload để đóng gói thành .ipa
+        # Copy file .app vừa build xong vào thư mục Payload để chuẩn bị đóng gói thành .ipa
         cp -r build/Release-iphoneos/*.app Payload/
         zip -r WHAM.ipa Payload
 
     - name: Upload IPA Artifact
-      uses: actions/actions-artifact@v4
+      uses: actions/upload-artifact@v4
       with:
         name: ios-app-ipa
         path: WHAM.ipa
