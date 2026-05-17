@@ -20,34 +20,42 @@ jobs:
 
     - name: Build Xcode Project (No Codesign)
       run: |
-        # Tự động tìm kiếm file .xcodeproj hoặc .xcworkspace trong toàn bộ repo
-        PROJECT_PATH=$(find . -name "*.xcodeproj" -o -name "*.xcworkspace" | head -n 1)
-        
-        if [ -z "$PROJECT_PATH" ]; then
-          echo "Error: Không tìm thấy file dự án Xcode nào (.xcodeproj hoặc .xcworkspace)!"
-          exit 1
-        fi
-        
-        echo "Tìm thấy dự án tại: $PROJECT_PATH"
-        
-        # Lấy tên file và phần mở rộng
-        EXT="${PROJECT_PATH##*.}"
-        
-        # Xác định flag dựa trên loại dự án (.xcodeproj hay .xcworkspace)
-        if [ "$EXT" = "xcworkspace" ]; then
+        set -euo pipefail
+
+        # Tự động ưu tiên file .xcworkspace nếu có, nếu không thì dùng .xcodeproj
+        WORKSPACE_PATH=$(find . -name "*.xcworkspace" | head -n 1)
+        if [ -n "$WORKSPACE_PATH" ]; then
+          PROJECT_PATH="$WORKSPACE_PATH"
           XCODE_FLAG="-workspace"
         else
+          PROJECT_PATH=$(find . -name "*.xcodeproj" | head -n 1)
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "Error: Không tìm thấy file dự án Xcode nào (.xcodeproj hoặc .xcworkspace)!"
+            exit 1
+          fi
           XCODE_FLAG="-project"
         fi
-        
-        # Chạy lệnh build sử dụng đường dẫn vừa tìm được
-        xcodebuild $XCODE_FLAG "$PROJECT_PATH" -scheme WHAM -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO OBJROOT="${{ github.workspace }}/build" SYMROOT="${{ github.workspace }}/build"
+
+        echo "Tìm thấy dự án tại: $PROJECT_PATH"
+
+        SCHEME=$(xcodebuild -list -json $XCODE_FLAG "$PROJECT_PATH" | python -c 'import json,sys; data=json.load(sys.stdin); schemes=(data.get("workspace") or data.get("project") or {}).get("schemes") or []; print(schemes[0]) if schemes else sys.exit("Error: Không tìm thấy scheme được share trong dự án!")')
+        echo "Dùng scheme: $SCHEME"
+
+        echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+        echo "BUILD_DIR=${{ github.workspace }}/build" >> "$GITHUB_ENV"
+
+        # Chạy lệnh build sử dụng đường dẫn và scheme vừa tìm được
+        xcodebuild $XCODE_FLAG "$PROJECT_PATH" -scheme "$SCHEME" -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO OBJROOT="${{ github.workspace }}/build" SYMROOT="${{ github.workspace }}/build"
 
     - name: Package into .ipa
       run: |
+        set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find ${{ github.workspace }}/build -name "*.app" | head -n 1)
+        APP_PATH=$(find "${BUILD_DIR}" -type d -name "${SCHEME}.app" | head -n 1)
+        if [ -z "$APP_PATH" ]; then
+          APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
+        fi
         if [ -z "$APP_PATH" ]; then
           echo "Error: Không tìm thấy file .app sau khi build!"
           exit 1
