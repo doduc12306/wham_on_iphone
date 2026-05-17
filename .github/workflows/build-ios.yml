@@ -20,14 +20,39 @@ jobs:
 
     - name: Build Xcode Project (No Codesign)
       run: |
-        # Tự động tìm file .xcodeproj và build sang cấu hình Release cho thiết bị iOS thật
-        xcodebuild -project *.xcodeproj -scheme WHAM -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO
+        # Tự động tìm kiếm file .xcodeproj hoặc .xcworkspace trong toàn bộ repo
+        PROJECT_PATH=$(find . -name "*.xcodeproj" -o -name "*.xcworkspace" | head -n 1)
+        
+        if [ -z "$PROJECT_PATH" ]; then
+          echo "Error: Không tìm thấy file dự án Xcode nào (.xcodeproj hoặc .xcworkspace)!"
+          exit 1
+        fi
+        
+        echo "Tìm thấy dự án tại: $PROJECT_PATH"
+        
+        # Lấy tên file và phần mở rộng
+        EXT="${PROJECT_PATH##*.}"
+        
+        # Xác định flag dựa trên loại dự án (.xcodeproj hay .xcworkspace)
+        if [ "$EXT" = "xcworkspace" ]; then
+          XCODE_FLAG="-workspace"
+        else
+          XCODE_FLAG="-project"
+        fi
+        
+        # Chạy lệnh build sử dụng đường dẫn vừa tìm được
+        xcodebuild $XCODE_FLAG "$PROJECT_PATH" -scheme WHAM -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO OBJROOT="${{ github.workspace }}/build" SYMROOT="${{ github.workspace }}/build"
 
     - name: Package into .ipa
       run: |
         mkdir -p Payload
-        # Copy file .app vừa build xong vào thư mục Payload để chuẩn bị đóng gói thành .ipa
-        cp -r build/Release-iphoneos/*.app Payload/
+        # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
+        APP_PATH=$(find ${{ github.workspace }}/build -name "*.app" | head -n 1)
+        if [ -z "$APP_PATH" ]; then
+          echo "Error: Không tìm thấy file .app sau khi build!"
+          exit 1
+        fi
+        cp -r "$APP_PATH" Payload/
         zip -r WHAM.ipa Payload
 
     - name: Upload IPA Artifact
