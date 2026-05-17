@@ -38,10 +38,15 @@ jobs:
 
         echo "Tìm thấy dự án tại: $PROJECT_PATH"
 
-        if [ "$XCODE_FLAG" = "-workspace" ]; then
-          SCHEME=$(xcodebuild -list -json -workspace "$PROJECT_PATH" | jq -r '.workspace.schemes[0] // empty')
+        PROJECT_NAME=$(basename "$PROJECT_PATH")
+        PROJECT_NAME="${PROJECT_NAME%.*}"
+
+        if [ -n "${IOS_SCHEME:-}" ]; then
+          SCHEME="$IOS_SCHEME"
+        elif [ "$XCODE_FLAG" = "-workspace" ]; then
+          SCHEME=$(xcodebuild -list -json -workspace "$PROJECT_PATH" | jq -r --arg project "$PROJECT_NAME" '.workspace.schemes | (map(select(.==$project)) | .[0]) // .[0] // empty')
         else
-          SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | jq -r '.project.schemes[0] // empty')
+          SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | jq -r --arg project "$PROJECT_NAME" '.project.schemes | (map(select(.==$project)) | .[0]) // .[0] // empty')
         fi
         if [ -z "$SCHEME" ]; then
           echo "Error: Không tìm thấy scheme trong dự án!"
@@ -60,7 +65,11 @@ jobs:
         set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
+        APP_DIR="${BUILD_DIR}/Release-iphoneos"
+        if [ ! -d "$APP_DIR" ]; then
+          APP_DIR="${BUILD_DIR}"
+        fi
+        APP_PATH=$(find "${APP_DIR}" -maxdepth 1 -type d -name "*.app" | head -n 1)
         if [ -z "$APP_PATH" ]; then
           echo "Error: Không tìm thấy file .app sau khi build!"
           exit 1
