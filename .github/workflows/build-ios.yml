@@ -38,33 +38,28 @@ jobs:
 
         echo "Tìm thấy dự án tại: $PROJECT_PATH"
 
-        SCHEME=$(xcodebuild -list -json $XCODE_FLAG "$PROJECT_PATH" | python -c 'import json,sys; data=json.load(sys.stdin); schemes=(data.get("workspace") or data.get("project") or {}).get("schemes") or []; 
-if not schemes:
-    print("Error: Không tìm thấy scheme được share trong dự án!", file=sys.stderr)
-    sys.exit(1)
-print(schemes[0])')
+        SCHEME=$(xcodebuild -list -json "$XCODE_FLAG" "$PROJECT_PATH" | jq -r '.workspace.schemes[0] // .project.schemes[0] // empty')
+        if [ -z "$SCHEME" ]; then
+          echo "Error: Không tìm thấy scheme được share trong dự án!"
+          exit 1
+        fi
         echo "Dùng scheme: $SCHEME"
 
         echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
         echo "BUILD_DIR=${{ github.workspace }}/build" >> "$GITHUB_ENV"
 
         # Chạy lệnh build sử dụng đường dẫn và scheme vừa tìm được
-        xcodebuild $XCODE_FLAG "$PROJECT_PATH" -scheme "$SCHEME" -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO OBJROOT="${{ github.workspace }}/build" SYMROOT="${{ github.workspace }}/build"
+        xcodebuild "$XCODE_FLAG" "$PROJECT_PATH" -scheme "$SCHEME" -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO OBJROOT="${{ github.workspace }}/build" SYMROOT="${{ github.workspace }}/build"
 
     - name: Package into .ipa
       run: |
         set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" -print0 | python -c 'import os,sys; scheme=os.environ.get("SCHEME"); paths=[p.decode() for p in sys.stdin.buffer.read().split(b"\0") if p]; 
-if scheme:
-    target=scheme + ".app"
-    for path in paths:
-        if os.path.basename(path) == target:
-            print(path)
-            sys.exit(0)
-if paths:
-    print(paths[0])')
+        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | awk -F/ -v scheme="$SCHEME" '$NF==scheme".app"{print; exit}')
+        if [ -z "$APP_PATH" ]; then
+          APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
+        fi
         if [ -z "$APP_PATH" ]; then
           echo "Error: Không tìm thấy file .app sau khi build!"
           exit 1
