@@ -38,7 +38,11 @@ jobs:
 
         echo "Tìm thấy dự án tại: $PROJECT_PATH"
 
-        SCHEME=$(xcodebuild -list -json "$XCODE_FLAG" "$PROJECT_PATH" | jq -r '.workspace.schemes[0] // .project.schemes[0] // empty')
+        if [ "$XCODE_FLAG" = "-workspace" ]; then
+          SCHEME=$(xcodebuild -list -json -workspace "$PROJECT_PATH" | jq -r '.workspace.schemes[0] // empty')
+        else
+          SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | jq -r '.project.schemes[0] // empty')
+        fi
         if [ -z "$SCHEME" ]; then
           echo "Error: Không tìm thấy scheme được share trong dự án!"
           exit 1
@@ -56,7 +60,7 @@ jobs:
         set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | awk -F/ -v scheme="$SCHEME" '$NF==scheme".app"{print; exit}')
+        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | awk -F/ -v target="${SCHEME}.app" '$NF==target{print; exit}')
         if [ -z "$APP_PATH" ]; then
           APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
         fi
