@@ -44,7 +44,7 @@ jobs:
           SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | jq -r '.project.schemes[0] // empty')
         fi
         if [ -z "$SCHEME" ]; then
-          echo "Error: Không tìm thấy scheme được share trong dự án!"
+          echo "Error: Không tìm thấy scheme trong dự án!"
           exit 1
         fi
         echo "Dùng scheme: $SCHEME"
@@ -60,10 +60,7 @@ jobs:
         set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find "${BUILD_DIR}" -type d -name "${SCHEME}.app" | head -n 1)
-        if [ -z "$APP_PATH" ]; then
-          APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
-        fi
+        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
         if [ -z "$APP_PATH" ]; then
           echo "Error: Không tìm thấy file .app sau khi build!"
           exit 1
