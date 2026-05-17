@@ -60,7 +60,7 @@ jobs:
         set -euo pipefail
         mkdir -p Payload
         # Tìm file .app đã build xong trong thư mục output và đưa vào Payload
-        APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | awk -F/ -v target="${SCHEME}.app" '$NF==target{print; exit}')
+        APP_PATH=$(find "${BUILD_DIR}" -type d -name "${SCHEME}.app" | head -n 1)
         if [ -z "$APP_PATH" ]; then
           APP_PATH=$(find "${BUILD_DIR}" -type d -name "*.app" | head -n 1)
         fi
